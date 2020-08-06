@@ -1,0 +1,9 @@
+Запустить базу данных:
+	sudo systemctl start mongod
+Проверить статус
+	sudo systemctl status mongod
+Прекратить работу бд:
+    sudo systemctl stop mongod
+
+exit - безопасно завершить работу
+register %link% %period% - добавить задачу опроса статистики предмета по ссылке каждые period секунд
