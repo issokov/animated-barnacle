@@ -90,13 +90,3 @@ class SteamSession(ABCSteamSession):
         self.save_cookies()
         await self.session.close()
         await asyncio.sleep(0.250)
-
-
-async def main():
-    await ss.try_init_cookies()
-    print(await ss.is_alive())
-    await ss.aio_destructor()
-
-
-if __name__ == '__main__':
-    asyncio.run(main())
