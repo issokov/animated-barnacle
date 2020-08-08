@@ -20,7 +20,7 @@ class ABCSteamSession(ABC):
         pass
 
     @abstractmethod
-    async def get_page(self, url) -> str:
+    async def get(self, url, timeout=5) -> aiohttp.ClientResponse:
         pass
 
 
@@ -63,10 +63,10 @@ class SteamSession(ABCSteamSession):
         json.dump(self.credentials, open(self.credentials_json_path, 'w'))
         print(f'Cookie for user {self.username} saved in {self.cookies_path}')
 
-    async def get_page(self, url):
+    async def get(self, url, timeout=5):
         if self.requests_counter < self.requests_threshold:
             self.requests_counter += 1
-            response = await self.session.get(url)
+            response = await self.session.get(url, timeout=timeout)
             return response
         else:
             raise ThresholdReached(f'Requests threshold({self.requests_threshold}) reached.')

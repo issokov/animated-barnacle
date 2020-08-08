@@ -73,7 +73,7 @@ class MarketObserver:
         :param item_url:
         :return:
         """
-        page_source = self.stealer.get_page(item_url)
+        page_source = self.stealer.get(item_url)
         try:
             app_id, hash_name = extract_appid_and_hashname(item_url)
             return {
@@ -91,7 +91,7 @@ class MarketObserver:
     def compose_and_send(self, template, **kwargs):
         try:
             url = template.format(**kwargs, **preferences)
-            data = self.stealer.get_page(url)
+            data = self.stealer.get(url)
             return json.loads(data)
         except (JSONDecodeError, TypeError):
             # TODO make log

@@ -1,19 +1,8 @@
 import asyncio
 
-#
-from utils.db_wrapper import MongoWrapper, DBWrapper
-#
 from task import Task
 from utils.steam_session import SteamSession
 
-class DummyTask(Task):
-    def __init__(self, db_wrapper: DBWrapper, period: float):
-        super().__init__(db_wrapper, period=period)
-
-    async def run(self, session: SteamSession, output: asyncio.Queue):
-        print("Do something and sleep")
-        await asyncio.sleep(self.period)
-        print("Sleep is over")
 
 
 class Observer:
@@ -44,20 +33,3 @@ class Observer:
     async def add_task(self, task: Task):
         self.running_tasks.append(asyncio.create_task(task.run(self.session, self.output_events)))
 
-
-async def main():
-    queue = asyncio.Queue()
-    mongo = object()
-    observer = Observer(queue)
-    await observer.init()
-    observer_task = asyncio.create_task(observer.run())
-
-    first_task = DummyTask(mongo, 10)
-    second_task = DummyTask(mongo, 3)
-    await observer.add_task(first_task)
-    await observer.add_task(second_task)
-    await observer_task
-    await observer.session.aio_destructor()
-
-if __name__ == "__main__":
-    asyncio.run(main())
