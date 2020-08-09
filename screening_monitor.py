@@ -1,14 +1,14 @@
 import asyncio
 
+from urllib import parse
 from aiohttp import ContentTypeError, ClientError, ServerTimeoutError
-from hashlib import sha1
 
 from utils.db_wrapper import DBWrapper
 from utils.steam_session import ABCSteamSession, ThresholdReached
-from task import Task, TaskEvent, TaskType, TaskEventType, time_now
+from monitor import Monitor, MonitorEvent, MonitorType, MonitorEventType, time_now
 
 
-async def _extract_pure_item(json_item: dict):
+def _extract_pure_item(json_item: dict):
     asset = json_item['asset_description']
     if asset['marketable'] and 'market_marketable_restriction' not in asset:
         app_id = asset['appid']
@@ -23,43 +23,37 @@ async def _extract_pure_item(json_item: dict):
         }
 
 
-class ScreeningTask(Task):
+class ScreeningMonitor(Monitor):
     def __init__(self, url: str, period: float, db_wrapper: DBWrapper):
-        super().__init__(db_wrapper, period)
-        self.task_type = TaskType.SCREENING
-        self.url = url
-        self.id = sha1(f"{self.task_type}-{url}".encode('utf-8'))
+        super().__init__(url, period, db_wrapper)
+        self.monitor_type = MonitorType.SCREENING
 
-    async def run(self, session: ABCSteamSession, queue: asyncio.Queue):
+    async def run(self, session: ABCSteamSession) -> MonitorEvent:
         # TODO LOGS
         try:
             response = await session.get(url=self.url)
             data = await response.json()
         except ThresholdReached:
-            await queue.put(TaskEvent(self.url, TaskEventType.REQUEST_LIMIT))
+            return MonitorEvent(self.url, MonitorEventType.REQUEST_LIMIT)
         except ContentTypeError:
-            await queue.put(TaskEvent(self.url, TaskEventType.WEB_ERROR))
+            return MonitorEvent(self.url, MonitorEventType.WEB_ERROR)
         except ServerTimeoutError:
-            await queue.put(TaskEvent(self.url, TaskEventType.REQUEST_TIMEOUT))
+            return MonitorEvent(self.url, MonitorEventType.REQUEST_TIMEOUT)
         except ClientError as e:
             print(e)
-            await queue.put(TaskEvent(self.url, TaskEventType.WEB_ERROR))
+            return MonitorEvent(self.url, MonitorEventType.WEB_ERROR)
         else:
             if data['success'] != 1:
                 print('Cannot collect items: wrong API')
-                await queue.put(TaskEvent(self.url, TaskEventType.WEB_ERROR))
-                return
+                return MonitorEvent(self.url, MonitorEventType.WEB_ERROR)
             if not data['results']:
                 print('Empty response')
-                await queue.put(TaskEvent(self.url, TaskEventType.EMPTY_RESPONSE))
-                return
+                return MonitorEvent(self.url, MonitorEventType.EMPTY_RESPONSE)
             for item in data['results']:
                 pure_item = _extract_pure_item(item)
-                await self.db_wrapper.register_item(pure_item)
-                await queue.put(TaskEvent(self.url, TaskEventType.FINISHED))
+                if pure_item:
+                    await self.db_wrapper.register_item(pure_item)
+            return MonitorEvent(self.url, MonitorEventType.SUCCESS)
 
-    def __hash__(self):
-        return self.id
-
-    async def get_task_type(self) -> int:
-        return self.task_type
+    def get_monitor_type(self):
+        return self.monitor_type

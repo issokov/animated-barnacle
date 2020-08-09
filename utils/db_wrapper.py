@@ -45,7 +45,9 @@ class MongoWrapper(DBWrapper):
         if 'TradeBot' not in self.client.list_database_names():
             # TODO: log that DB not found
             print('WARNING: DB not found we will create new one.')
-            self.db = self.client.get_database('TradeBot')
+        else:
+            print('DB was found. All ok')
+        self.db = self.client.get_database('TradeBot')
 
     async def register_item(self, item):
         self.db['items_list'].replace_one({'market_hash_name': item['market_hash_name'], 'app_id': item['app_id']},
