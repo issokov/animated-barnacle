@@ -19,7 +19,7 @@ class MonitorEventType(Enum):
     WEB_ERROR = 2
     EMPTY_RESPONSE = 3
     REQUEST_LIMIT = 4
-
+    SESSION_CLOSED = 5
 
 @unique
 class MonitorType(Enum):
@@ -29,9 +29,9 @@ class MonitorType(Enum):
 
 
 class MonitorEvent:
-    def __init__(self, url: str, m_e_t: MonitorEventType):
+    def __init__(self, url: str, event_type: MonitorEventType):
         self.url = url
-        self.event_type = m_e_t
+        self.event_type = event_type
 
 
 class Monitor(ABC):
@@ -39,6 +39,7 @@ class Monitor(ABC):
         self.url = url
         self.period = period
         self.db_wrapper = db_wrapper
+        self._last_request_time = None
 
     @abstractmethod
     async def run(self, session: ABCSteamSession):
@@ -47,3 +48,6 @@ class Monitor(ABC):
     @abstractmethod
     def get_monitor_type(self):
         pass
+
+    def get_request_time(self) -> datetime:
+        return self._last_request_time

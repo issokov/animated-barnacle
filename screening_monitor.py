@@ -1,5 +1,7 @@
 import asyncio
 
+from datetime import datetime
+
 from urllib import parse
 from aiohttp import ContentTypeError, ClientError, ServerTimeoutError
 
@@ -31,6 +33,7 @@ class ScreeningMonitor(Monitor):
     async def run(self, session: ABCSteamSession) -> MonitorEvent:
         # TODO LOGS
         try:
+            self._last_request_time = datetime.now()
             response = await session.get(url=self.url)
             data = await response.json()
         except ThresholdReached:
@@ -39,6 +42,8 @@ class ScreeningMonitor(Monitor):
             return MonitorEvent(self.url, MonitorEventType.WEB_ERROR)
         except ServerTimeoutError:
             return MonitorEvent(self.url, MonitorEventType.REQUEST_TIMEOUT)
+        except RuntimeError:
+            return MonitorEvent(self.url, MonitorEventType.SESSION_CLOSED)
         except ClientError as e:
             print(e)
             return MonitorEvent(self.url, MonitorEventType.WEB_ERROR)
