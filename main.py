@@ -8,8 +8,7 @@ async def main():
     queue = asyncio.Queue()
     mongo = MongoWrapper()
     observer = Observer(queue)
-    await observer.init()
-    observer_task = asyncio.create_task(observer.run())
+    asyncio.create_task(observer.run())
 
     url = f"https://steamcommunity.com/market/search/render/?query=&start=0&count=100&" \
           f"search_descriptions=0&sort_column=popular&sort_dir=desc&appid=730&norender=1"
@@ -17,11 +16,10 @@ async def main():
     await observer.add_monitor(task)
 
     print("Main loop goes sleep")
-    await asyncio.sleep(20)
+    await asyncio.sleep(30)
     print("Main loop wake up")
 
     await observer.stop()
-    observer_task.cancel()
     print("Return")
 
 

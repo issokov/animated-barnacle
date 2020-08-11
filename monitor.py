@@ -20,12 +20,14 @@ class MonitorEventType(Enum):
     EMPTY_RESPONSE = 3
     REQUEST_LIMIT = 4
     SESSION_CLOSED = 5
+    TOO_MANY_REQUEST = 6
 
 @unique
 class MonitorType(Enum):
     SCREENING = 0
-    PRICE_HISTORY = 1
-    HISTOGRAM = 2
+    DESCRIPTION = 1
+    PRICE_HISTORY = 2
+    HISTOGRAM = 3
 
 
 class MonitorEvent:

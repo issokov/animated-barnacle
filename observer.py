@@ -27,7 +27,7 @@ class Observer:
 
     async def init(self):
         if not self._session_inited:
-            await self._session.try_init_cookies()
+            await self._session.init_session()
             self._session_inited = True
 
     async def run(self):
@@ -36,33 +36,41 @@ class Observer:
         while self._running:
             while not self._run_task_queue.empty() and self._running:
                 monitor, delay = await self._run_task_queue.get()
-                asyncio.create_task(self.add_monitor(monitor, delay))
+                asyncio.create_task(self.run_monitor_with_delay(monitor, delay))
             await asyncio.sleep(self._sleep_delay)
+        await self._session.aio_destructor()
+        self._session_inited = False
 
     async def stop(self):
-        await self._session.aio_destructor()
         self._running = False
+        while self._session_inited:
+            await asyncio.sleep(self._sleep_delay)
 
     async def _completed_callback(self, monitor_event):
+        m_e_t = monitor_event.event_type
+        await self._output_events.put(monitor_event)
         monitor = self._monitors[monitor_event.url]
+        print("Result of monitor: MonitorEventType: ", monitor_event.event_type)
+        if not self._running:
+            return
         if monitor_event.event_type is not MonitorEventType.SUCCESS:
-            print("Unsuccessful task execution: MonitorEventType: ", monitor_event.event_type)
-            # TODO: case when threshold limitation, no internet, etc...
-            if self._running:
-                await self._run_task_queue.put((monitor, 0))
-                # We can't call add_monitor immediately for to be protected from stack overflow
+            if m_e_t is MonitorEventType.TIMEOUT or m_e_t is MonitorEventType.WEB_ERROR:
+                await self.add_monitor(monitor, 5)
+            elif m_e_t is MonitorEventType.TOO_MANY_REQUEST:
+                await self.add_monitor(monitor, 15)
+                print("Too many requsts....")
         else:
-            print("You should put result in output queue", datetime.now())
-
             if monitor.period:
                 if self._running:
-                    await self._run_task_queue.put((monitor, monitor.period))
+                    await self.add_monitor(monitor, monitor.period)
             else:
                 self._monitors.pop(monitor.url)
 
     async def add_monitor(self, monitor: Monitor, delay=0):
+        await self._run_task_queue.put((monitor, delay))
+
+    async def run_monitor_with_delay(self, monitor: Monitor, delay=0):
         sleeping_time = get_sleeping_time(monitor, delay)
-        print(f"Sleep for {sleeping_time}")
         await asyncio.sleep(sleeping_time)
         self._monitors[monitor.url] = monitor
         monitor_event = await monitor.run(self._session)

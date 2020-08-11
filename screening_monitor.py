@@ -3,7 +3,7 @@ import asyncio
 from datetime import datetime
 
 from urllib import parse
-from aiohttp import ContentTypeError, ClientError, ServerTimeoutError
+from aiohttp import ContentTypeError, ClientError
 
 from utils.db_wrapper import DBWrapper
 from utils.steam_session import ABCSteamSession, ThresholdReached
@@ -40,14 +40,19 @@ class ScreeningMonitor(Monitor):
             return MonitorEvent(self.url, MonitorEventType.REQUEST_LIMIT)
         except ContentTypeError:
             return MonitorEvent(self.url, MonitorEventType.WEB_ERROR)
-        except ServerTimeoutError:
-            return MonitorEvent(self.url, MonitorEventType.REQUEST_TIMEOUT)
+        except asyncio.TimeoutError:
+            return MonitorEvent(self.url, MonitorEventType.TIMEOUT)
         except RuntimeError:
             return MonitorEvent(self.url, MonitorEventType.SESSION_CLOSED)
         except ClientError as e:
             print(e)
             return MonitorEvent(self.url, MonitorEventType.WEB_ERROR)
+        except Exception as e:
+            print('Unknown exception')
+            print(e)
         else:
+            if response.status == 429:
+                return MonitorEvent(self.url, MonitorEventType.TOO_MANY_REQUEST)
             if data['success'] != 1:
                 print('Cannot collect items: wrong API')
                 return MonitorEvent(self.url, MonitorEventType.WEB_ERROR)

@@ -41,10 +41,11 @@ class SteamSession(ABCSteamSession):
         self.cookies_path = self.credentials.get('path_to_cookies', None)
         self.requests_counter = 0
         self.requests_threshold = 99000
-        self.session = aiohttp.ClientSession()
+        self.session = None
         self.cookies = None
 
-    async def try_init_cookies(self):
+    async def init_session(self):
+        self.session = aiohttp.ClientSession()
         if os.path.exists(self.cookies_path):
             print("Cookies found.")
             self.session._cookie_jar.load(self.cookies_path)
@@ -64,6 +65,8 @@ class SteamSession(ABCSteamSession):
         print(f'Cookie for user {self.username} saved in {self.cookies_path}')
 
     async def get(self, url, timeout=5):
+        if not self.session:
+            await self.init_session()
         if self.requests_counter < self.requests_threshold:
             self.requests_counter += 1
             response = await self.session.get(url, timeout=timeout)
@@ -89,4 +92,5 @@ class SteamSession(ABCSteamSession):
     async def aio_destructor(self):
         self.save_cookies()
         await self.session.close()
+        self.session = None
         await asyncio.sleep(0.250)
