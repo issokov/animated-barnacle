@@ -1,5 +1,5 @@
 import asyncio
-from observer import Observer
+from observer import MonitorManager
 from screening_monitor import ScreeningMonitor
 from utils.db_wrapper import MongoWrapper
 
@@ -7,7 +7,7 @@ from utils.db_wrapper import MongoWrapper
 async def main():
     queue = asyncio.Queue()
     mongo = MongoWrapper()
-    observer = Observer(queue)
+    observer = MonitorManager(queue)
     asyncio.create_task(observer.run())
 
     url = f"https://steamcommunity.com/market/search/render/?query=&start=0&count=100&" \

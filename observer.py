@@ -1,77 +1,82 @@
 import asyncio
+from monitor_manager import MonitorManager
+from utils.db_wrapper import DBWrapper, MongoWrapper
 
-from datetime import datetime
-
-from monitor import Monitor, MonitorEventType
-from utils.steam_session import SteamSession
-
-
-def get_sleeping_time(monitor: Monitor, delay: float):
-    current = datetime.now()
-    last_update = monitor.get_request_time()
-    last_update = last_update if last_update else current
-    true_delay = delay - (current - last_update).total_seconds()
-    return max(0., true_delay)
+from screening_monitor import ScreeningMonitor
+from description_monitor import DescriptionMonitor
+from pricehistory_monitor import PricehistoryMonitor
+from histogram_monitor import HistogramMonitor
 
 
 class Observer:
-    def __init__(self, output_events: asyncio.Queue):
-        # TODO move to config
-        self._session = SteamSession('/home/issokov/Desktop/credentials.txt')
-        self._sleep_delay = 0.001
-        self._output_events = output_events
-        self._session_inited = False
+    def __init__(self, output_events: asyncio.Queue, db_wrapper: DBWrapper):
+        self._observer_queue = output_events
+        self._mongo = db_wrapper
+        self._monitor_manager = MonitorManager(self._observer_queue)
         self._running = False
-        self._monitors = dict()
-        self._run_task_queue = asyncio.Queue()
-
-    async def init(self):
-        if not self._session_inited:
-            await self._session.init_session()
-            self._session_inited = True
 
     async def run(self):
-        await self.init()
         self._running = True
+        asyncio.create_task(self._monitor_manager.run())
         while self._running:
-            while not self._run_task_queue.empty() and self._running:
-                monitor, delay = await self._run_task_queue.get()
-                asyncio.create_task(self.run_monitor_with_delay(monitor, delay))
-            await asyncio.sleep(self._sleep_delay)
-        await self._session.aio_destructor()
-        self._session_inited = False
+            await asyncio.sleep(0.001)
+        await self._monitor_manager.stop()
+        print('Observer and analyzer was stopped')
 
     async def stop(self):
         self._running = False
-        while self._session_inited:
-            await asyncio.sleep(self._sleep_delay)
 
-    async def _completed_callback(self, monitor_event):
-        m_e_t = monitor_event.event_type
-        await self._output_events.put(monitor_event)
-        monitor = self._monitors[monitor_event.url]
-        print("Result of monitor: MonitorEventType: ", monitor_event.event_type)
-        if not self._running:
-            return
-        if monitor_event.event_type is not MonitorEventType.SUCCESS:
-            if m_e_t is MonitorEventType.TIMEOUT or m_e_t is MonitorEventType.WEB_ERROR:
-                await self.add_monitor(monitor, 5)
-            elif m_e_t is MonitorEventType.TOO_MANY_REQUEST:
-                await self.add_monitor(monitor, 15)
-                print("Too many requsts....")
-        else:
-            if monitor.period:
-                if self._running:
-                    await self.add_monitor(monitor, monitor.period)
-            else:
-                self._monitors.pop(monitor.url)
+    async def make_screening(self, how_many_hundreds: int, app_id='730', period=0):
+        urls = []
+        for start, delay in zip(range(0, how_many_hundreds, 100), [x * 0.5 for x in range(how_many_hundreds // 100)]):
+            url = f"https://steamcommunity.com/market/search/render/?query=&start={start}&count=100&" \
+                  f"search_descriptions=0&sort_column=popular&sort_dir=desc&appid={app_id}&norender=1"
+            await self._monitor_manager.add_monitor(ScreeningMonitor(url, period, self._mongo), delay)
+            urls.append(url)
+        return urls
 
-    async def add_monitor(self, monitor: Monitor, delay=0):
-        await self._run_task_queue.put((monitor, delay))
+    async def get_description(self, item_url):
+        description = await self._mongo.get_description(item_url)
+        if not description:
+            await self._monitor_manager.run_monitor_with_delay(DescriptionMonitor(item_url, self._mongo))
+        return await self._mongo.get_description(item_url)
 
-    async def run_monitor_with_delay(self, monitor: Monitor, delay=0):
-        sleeping_time = get_sleeping_time(monitor, delay)
-        await asyncio.sleep(sleeping_time)
-        self._monitors[monitor.url] = monitor
-        monitor_event = await monitor.run(self._session)
-        await self._completed_callback(monitor_event)
+    async def update_price_history(self, app_id: str, market_hash_name: str, period=0):
+        url = "https://steamcommunity.com/market/pricehistory/?currency={currency}" \
+              f"&appid={app_id}&market_hash_name={market_hash_name}"
+        # TODO make it available for other currencies
+        await self._monitor_manager.add_monitor(PricehistoryMonitor(url, period, self._mongo))
+        return url
+
+    async def update_histogram(self, app_id: str, market_hash_name: str, period=0):
+        desc = await self.get_description(f"https://steamcommunity.com/market/listings/{app_id}/{market_hash_name}")
+        item_nameid = desc['item_nameid']
+        url = "https://steamcommunity.com/market/itemordershistogram" \
+              "?country={country}" \
+              "&language={language}" \
+              "&currency={currency}" \
+              f"&item_nameid={item_nameid}" \
+              "&two_factor={two_factor}" \
+              "&norender={norender}"
+        await self._monitor_manager.add_monitor(HistogramMonitor(url, period, self._mongo))
+        return url
+
+async def main():
+    q = asyncio.Queue()
+    m = MongoWrapper()
+    observer = Observer(q, m)
+    observer_task = asyncio.create_task(observer.run())
+    await asyncio.sleep(3)
+    await observer.make_screening(how_many_hundreds=500)
+    await observer.update_price_history("730", "Danger%20Zone%20Case")
+    await observer.update_histogram("730", "Danger%20Zone%20Case")
+
+    print("Sleep 10 sec")
+    await asyncio.sleep(10)
+    print("Wake upped")
+    await observer.stop()
+    await observer_task
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

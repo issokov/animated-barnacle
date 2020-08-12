@@ -12,7 +12,7 @@ from abc import ABC, abstractmethod
 class ABCSteamSession(ABC):
 
     @abstractmethod
-    async def get_account_preferences(self):
+    def get_account_preferences(self):
         pass
 
     @abstractmethod
@@ -74,7 +74,7 @@ class SteamSession(ABCSteamSession):
         else:
             raise ThresholdReached(f'Requests threshold({self.requests_threshold}) reached.')
 
-    async def get_account_preferences(self):
+    def get_account_preferences(self):
         # TODO dump to credentials or make it auto-filled
         return {
             "country": "RU",
