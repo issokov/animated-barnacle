@@ -2,21 +2,21 @@ from urllib import parse
 
 from utils.db_wrapper import DBWrapper
 from utils.steam_session import ABCSteamSession
-from monitor import Monitor, MonitorEvent, MonitorType, MonitorEventType, time_now
+from monitors.monitor import Monitor, MonitorEvent, MonitorType, MonitorEventType, time_now
 
 
 def _extract_pure_item(json_item: dict):
     asset = json_item['asset_description']
     if asset['marketable'] and 'market_marketable_restriction' not in asset:
-        app_id = asset['appid']
+        app_id = str(asset['appid'])
         name = asset['market_hash_name']
         return {
             "time": time_now(),
             "app_id": app_id,
             "market_hash_name": name,
             "count": json_item["sell_listings"],
-            "price": json_item["sell_price"],
-            "link": f"https://steamcommunity.com/market/listings/{app_id}/{parse.quote(name)}"
+            "price": json_item["sell_price"] / 100,
+            "url": f"https://steamcommunity.com/market/listings/{app_id}/{parse.quote(name)}"
         }
 
 
@@ -28,7 +28,8 @@ class ScreeningMonitor(Monitor):
     async def run(self, session: ABCSteamSession) -> MonitorEvent:
         # TODO LOGS
         event, data = await self.get_data(session)
-        if event.event_type is MonitorEventType.SUCCESS:
+        event.set_monitor_type(self.get_monitor_type())  # TODO move it into Monitor(ABC)
+        if event.type is MonitorEventType.SUCCESS:
             if not data['results']:
                 print('Empty response')
                 return MonitorEvent(self.blank_url, MonitorEventType.EMPTY_RESPONSE)

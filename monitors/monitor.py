@@ -13,6 +13,11 @@ def time_now():
     return int(datetime.utcnow().timestamp())
 
 
+def fill_url_blank(blank_url: str, session: ABCSteamSession):
+    preferences = session.get_account_preferences()
+    return blank_url.format(**preferences)
+
+
 def find_between(left: str, right: str, source: str):
     start = source.find(left)
     if start != -1:
@@ -24,6 +29,13 @@ def find_between(left: str, right: str, source: str):
         else:
             return source[start:]
     return None
+
+
+def cut_history(history: list, start_hours, finish_hours):
+    current = (datetime.utcnow().timestamp() // 3600) * 3600
+    start = current - start_hours * 3600
+    finish = current - finish_hours * 3600
+    return filter(lambda x: start >= x[0] >= finish, history)
 
 
 def extract_appid_and_hashname(item_url: str):
@@ -55,17 +67,21 @@ class MonitorType(Enum):
     DESCRIPTION = 1
     PRICEHISTORY = 2
     HISTOGRAM = 3
+    INVENTORY = 4
 
 
 class MonitorEvent:
-    def __init__(self, url: str, event_type: MonitorEventType):
+    def __init__(self, url: str, e_type: MonitorEventType):
         self.url = url
-        self.event_type = event_type
+        self.owner = None
+        self.type = e_type
+        self.monitor_type = None
 
+    def set_monitor_type(self, m_type: MonitorType):
+        self.monitor_type = m_type
 
-def fill_url_blank(blank_url: str, session: ABCSteamSession):
-    preferences = session.get_account_preferences()
-    return blank_url.format(**preferences)
+    def __str__(self):
+        return f"URL: {self.url}\nEVENT_TYPE: {self.type}\nOWNER: {self.owner}\n"
 
 
 class Monitor(ABC):
@@ -73,6 +89,7 @@ class Monitor(ABC):
         self.blank_url = blank_url
         self.period = period
         self.db_wrapper = db_wrapper
+        self.monitor_type = None
         self._last_request_time = None
 
     async def get_data(self, session: ABCSteamSession, return_json=True):
@@ -112,7 +129,7 @@ class Monitor(ABC):
 
     @abstractmethod
     def get_monitor_type(self):
-        pass
+        return self.monitor_type
 
     def get_request_time(self) -> datetime:
         return self._last_request_time

@@ -4,9 +4,13 @@ import os
 import json
 import uuid
 
-from utils.login_executor import LoginExecutor
-
 from abc import ABC, abstractmethod
+from datetime import datetime
+
+from aiohttp import FormData
+from yarl import URL
+
+from utils.login_executor import LoginExecutor
 
 
 class ABCSteamSession(ABC):
@@ -20,7 +24,15 @@ class ABCSteamSession(ABC):
         pass
 
     @abstractmethod
+    async def get_session_id(self):
+        pass
+
+    @abstractmethod
     async def get(self, url, timeout=5) -> aiohttp.ClientResponse:
+        pass
+
+    @abstractmethod
+    async def post(self, url: str, data: dict, referer: str):
         pass
 
 
@@ -41,6 +53,7 @@ class SteamSession(ABCSteamSession):
         self.cookies_path = self.credentials.get('path_to_cookies', None)
         self.requests_counter = 0
         self.requests_threshold = 99000
+        self.session_id = None
         self.session = None
         self.cookies = None
 
@@ -53,8 +66,10 @@ class SteamSession(ABCSteamSession):
             print('Session is alive. Login is not required')
         else:
             print('Cookies are invalid. Please, login.')
-            self.session = await LoginExecutor(self.username, self.password, self.session).login()
+            login_executor = LoginExecutor(self.username, self.password, self.session)
+            self.session = await login_executor.login()
             self.save_cookies()
+            self.session_id = login_executor.sessionid
 
     def save_cookies(self):
         if not os.path.exists(self.cookies_path):
@@ -67,9 +82,24 @@ class SteamSession(ABCSteamSession):
     async def get(self, url, timeout=5):
         if not self.session:
             await self.init_session()
+
         if self.requests_counter < self.requests_threshold:
             self.requests_counter += 1
             response = await self.session.get(url, timeout=timeout)
+            return response
+        else:
+            raise ThresholdReached(f'Requests threshold({self.requests_threshold}) reached.')
+
+    async def post(self, url: str, data: dict, referer: str):
+        if not self.session:
+            await self.init_session()
+        if self.requests_counter < self.requests_threshold:
+            self.requests_counter += 1
+            form_data = FormData(data)
+            headers = dict()
+            if referer:
+                headers['Referer'] = referer
+            response = await self.session.post(url, headers=headers, data=form_data)
             return response
         else:
             raise ThresholdReached(f'Requests threshold({self.requests_threshold}) reached.')
@@ -79,15 +109,21 @@ class SteamSession(ABCSteamSession):
         return {
             "country": "RU",
             "language": "russian",
-            "currency": "5",
+            "currency": 5,
             "price_suffix": 'pуб.',
-            "two_factor": "0",
-            "norender": "1",
+            "two_factor": 0,
+            "norender": 1,
         }
 
+    async def get_session_id(self):
+        return self.session.cookie_jar.filter_cookies(URL('https://help.steampowered.com')).get('sessionid').value
+
     async def is_alive(self):
+        # try:
         async with self.session.get('https://steamcommunity.com/my/home/') as resp:
             return self.username in await resp.text()
+        # except aiohttp.ClientError as e:
+        #     print(f"Connection error: {e}")
 
     async def aio_destructor(self):
         self.save_cookies()

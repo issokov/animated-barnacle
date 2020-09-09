@@ -1,6 +1,6 @@
 from utils.db_wrapper import DBWrapper
 from utils.steam_session import ABCSteamSession
-from monitor import Monitor, MonitorEvent, MonitorType, MonitorEventType, find_between, time_now, fill_url_blank
+from monitors.monitor import Monitor, MonitorEvent, MonitorType, MonitorEventType, find_between, time_now, fill_url_blank
 
 
 class BrokenPage(Exception):
@@ -24,12 +24,13 @@ def reformat_histogram(raw) -> dict:
 class HistogramMonitor(Monitor):
     def __init__(self, blank_url: str, period: float, db_wrapper: DBWrapper):
         super().__init__(blank_url, period, db_wrapper)
-        self.monitor_type = MonitorType.PRICEHISTORY
+        self.monitor_type = MonitorType.HISTOGRAM
 
     async def run(self, session: ABCSteamSession) -> MonitorEvent:
         # TODO LOGS
         event, data = await self.get_data(session)
-        if event.event_type is MonitorEventType.SUCCESS:
+        event.set_monitor_type(self.get_monitor_type())  # TODO move it into Monitor(ABC)
+        if event.type is MonitorEventType.SUCCESS:
             expected_currency = session.get_account_preferences()['price_suffix']
             if data["price_suffix"].encode('utf-8') == expected_currency.encode('utf-8'):
                 histogram = reformat_histogram(data)

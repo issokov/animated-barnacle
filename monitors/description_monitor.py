@@ -1,6 +1,6 @@
 from utils.db_wrapper import DBWrapper
 from utils.steam_session import ABCSteamSession
-from monitor import Monitor, MonitorEvent, MonitorType, MonitorEventType, extract_appid_and_hashname
+from monitors.monitor import Monitor, MonitorEvent, MonitorType, MonitorEventType, extract_appid_and_hashname
 
 
 class BrokenPage(Exception):
@@ -29,7 +29,8 @@ class DescriptionMonitor(Monitor):
     async def run(self, session: ABCSteamSession) -> MonitorEvent:
         # TODO LOGS
         event, data = await self.get_data(session, return_json=False)
-        if event.event_type is MonitorEventType.SUCCESS:
+        event.set_monitor_type(self.get_monitor_type())  # TODO move it into Monitor(ABC)
+        if event.type is MonitorEventType.SUCCESS:
             try:
                 app_id, hash_name = extract_appid_and_hashname(self.blank_url)
                 description = {

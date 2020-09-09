@@ -23,6 +23,7 @@ class LoginExecutor:
         self.password = password
         self.one_time_code = ''
         self.session = session
+        self.sessionid = None
 
     async def login(self) -> aiohttp.ClientSession:
         login_response = await self._send_login_request()
@@ -44,9 +45,9 @@ class LoginExecutor:
 
     def set_sessionid_cookies(self):
         cookies = self.session.cookie_jar.filter_cookies(URL('https://help.steampowered.com'))
-        sessionid = cookies.get('sessionid')
-        community_cookie = SimpleCookie(f"sessionid={sessionid}; Domain={'steamcommunity.com'}")
-        store_cookie = SimpleCookie(f"sessionid={sessionid}; Domain={'store.steampowered.com'}")
+        self.sessionid = cookies.get('sessionid')
+        community_cookie = SimpleCookie(f"sessionid={self.sessionid}; Domain={'steamcommunity.com'}")
+        store_cookie = SimpleCookie(f"sessionid={self.sessionid}; Domain={'store.steampowered.com'}")
         self.session.cookie_jar.update_cookies(community_cookie, URL('steamcommunity.com'))
         self.session.cookie_jar.update_cookies(store_cookie, URL('store.steampowered.com'))
 
