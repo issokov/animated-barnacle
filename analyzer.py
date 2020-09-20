@@ -106,8 +106,8 @@ async def main():
     # await analyzer.filter_task()
     await asyncio.sleep(3)
     await analyzer.short_trade_task()
-    print("Sleep for 15 seconds")
-    await asyncio.sleep(3600 * 24)
+    while True:
+    	await asyncio.sleep(3600)
     print("Wake up")
     await analyzer.stop()
 

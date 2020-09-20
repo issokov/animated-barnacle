@@ -67,7 +67,7 @@ class ShortTradeTask(Task):
         self.cash = cash
         self.item_identifier = (app_id, market_hash_name)
         self.period = kwargs.get('period', self.period)
-        self.market_stats.fill(await self.db_wrapper.get_histograms(*self.item_identifier, 3600 * 24))
+        #self.market_stats.fill(await self.db_wrapper.get_histograms(*self.item_identifier, 3600 * 24))
         print('Filled')
 
     async def run(self, task_id: int):
@@ -95,7 +95,7 @@ class ShortTradeTask(Task):
         if monitor_event.type is MonitorEventType.SUCCESS:
             if monitor_event.monitor_type is MonitorType.HISTOGRAM:
                 histogram = list((await self.db_wrapper.get_histograms(*self.item_identifier, self.period + 10)))[-1]
-                await self.update_model(histogram)
+                # await self.update_model(histogram)
             elif monitor_event.monitor_type is MonitorType.PRICEHISTORY:
                 self.market_stats.add_price_history(await self.db_wrapper.get_price_history(*self.item_identifier))
             elif monitor_event.monitor_type is MonitorType.INVENTORY:
